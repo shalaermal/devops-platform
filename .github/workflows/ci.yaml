@@ -6,10 +6,13 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  id-token: write
+  contents: write
+
 env:
   AWS_REGION: eu-central-1
   ECR_REGISTRY: 211125687060.dkr.ecr.eu-central-1.amazonaws.com
-
 jobs:
   build:
     name: Build and Push
