@@ -12,13 +12,6 @@ prometheus:
 grafana:
   enabled: true
   adminPassword: "devops123"
-  
-  ingress:
-    enabled: true
-    ingressClassName: nginx
-    hosts:
-      - grafana.local
-
   resources:
     requests:
       cpu: 100m
@@ -29,9 +22,7 @@ grafana:
 
 alertmanager:
   enabled: true
-
 nodeExporter:
   enabled: true
-
 kubeStateMetrics:
   enabled: true
