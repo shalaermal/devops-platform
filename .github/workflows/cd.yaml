@@ -1,0 +1,61 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: write
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REGISTRY: 211125687060.dkr.ecr.eu-central-1.amazonaws.com
+
+jobs:
+  deploy:
+    name: Build, Push & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to ECR
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build and push Frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./apps/frontend
+        push: true
+        tags: ${{ env.ECR_REGISTRY }}/frontend:${{ github.sha }}
+
+    - name: Build and push API
+      uses: docker/build-push-action@v5
+      with:
+        context: ./apps/api
+        push: true
+        tags: ${{ env.ECR_REGISTRY }}/api:${{ github.sha }}
+
+    - name: Build and push Worker
+      uses: docker/build-push-action@v5
+      with:
+        context: ./apps/worker
+        push: true
+        tags: ${{ env.ECR_REGISTRY }}/worker:${{ github.sha }}
+
+    - name: Update image tags in Git
+      run: |
+        git config user.email "github-actions@github.com"
+        git config user.name "GitHub Actions"
+        echo "IMAGE_TAG=${{ github.sha }}" > kubernetes/apps/podinfo/image-tag.env
+        git add kubernetes/apps/podinfo/image-tag.env
+        git commit -m "chore: update image tags to ${{ github.sha }}" || exit 0
+        git push
