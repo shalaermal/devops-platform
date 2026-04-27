@@ -1,24 +1,24 @@
 loki:
+  auth_enabled: false
   commonConfig:
     replication_factor: 1
   storage:
     type: filesystem
-  auth_enabled: false
+  useTestSchema: true
 
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 200m
-      memory: 256Mi
+deploymentMode: SingleBinary
 
-promtail:
-  enabled: true
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      cpu: 100m
-      memory: 128Mi
+singleBinary:
+  replicas: 1
+
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
