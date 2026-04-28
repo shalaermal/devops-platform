@@ -18,7 +18,7 @@ spec:
             summary: "Pod {{ $labels.pod }} po crash-on ne namespace {{ $labels.namespace }}"
 
         - alert: PodNotReady
-          expr: kube_pod_status_ready{condition="false"} == 1
+          expr: kube_pod_status_ready{condition="false", namespace!="default"} == 1
           for: 2m
           labels:
             severity: warning
