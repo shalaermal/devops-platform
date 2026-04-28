@@ -9,19 +9,30 @@ prometheus:
         cpu: 500m
         memory: 512Mi
 
-grafana:
-  enabled: true
-  adminPassword: "devops123"
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 200m
-      memory: 256Mi
-
 alertmanager:
   enabled: true
+  config:
+    global:
+      slack_api_url: 'https://hooks.slack.com/services/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'
+    route:
+      group_by: ['alertname']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 1h
+      receiver: 'slack'
+      routes:
+        - matchers:
+            - alertname = "Watchdog"
+          receiver: 'null'
+    receivers:
+      - name: 'slack'
+        slack_configs:
+          - channel: '#test_alert'
+            send_resolved: true
+            title: '{{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+      - name: 'null'
+
 nodeExporter:
   enabled: true
 kubeStateMetrics:
