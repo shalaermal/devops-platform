@@ -1,5 +1,7 @@
 prometheus:
   prometheusSpec:
+    nodeSelector:
+      role: monitoring
     retention: 7d
     resources:
       requests:
@@ -9,8 +11,25 @@ prometheus:
         cpu: 500m
         memory: 512Mi
 
+grafana:
+  enabled: true
+  adminPassword: "devops123"
+  nodeSelector:
+    role: monitoring
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  additionalDataSources: []
+
 alertmanager:
   enabled: true
+  alertmanagerSpec:
+    nodeSelector:
+      role: monitoring
   config:
     global:
       slack_api_url: 'https://hooks.slack.com/services/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'
