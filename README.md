@@ -82,7 +82,7 @@ devops-platform/
 ├── k6/
 │   └── load-test.js             # Load testing scripts
 ├── scripts/
-│   └── start-services.sh        # Local development helper
+│   └── start-platform.sh        # Local development helper
 ├── terraform/
 │   ├── environments/
 │   │   └── dev/                 # Dev environment configuration
@@ -203,7 +203,7 @@ A Kubernetes CronJob runs on a scheduled interval to simulate operational tasks 
 
 ```bash
 # Start port-forwarding for monitoring tools
-bash scripts/start-services.sh
+bash scripts/start-platform.sh
 
 # Grafana
 kubectl port-forward svc/prometheus-grafana 3000:80 -n monitoring
