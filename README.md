@@ -235,3 +235,68 @@ Infrastructure as Code using Terraform with a modular structure supporting multi
 ## Author
 
 Ermal Shala
+
+---
+
+## Security Notice
+
+Before deploying this platform, replace all placeholder values:
+
+- `kubernetes/monitoring/values.yaml` — replace `adminPassword` with a strong password
+- `kubernetes/monitoring/values.yaml` — replace `slack_api_url` with your own Slack webhook URL
+- Never commit real credentials to version control
+
+## Contributing
+
+This is a personal learning project. Feel free to fork and adapt it for your own use.
+
+## License
+
+
+---
+
+## Quick Recovery (Monitoring Stack)
+
+Nëse cluster-i riniset dhe duhet të rikonfigurosh monitoring:
+
+### 1. Prometheus + Grafana
+```bash
+helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace \
+  --values kubernetes/monitoring/values.yaml
+```
+
+### 2. Loki
+```bash
+helm upgrade --install loki grafana/loki \
+  --namespace monitoring \
+  --values kubernetes/loki/values.yaml
+```
+
+### 3. Promtail
+```bash
+helm upgrade --install promtail grafana/promtail \
+  --namespace monitoring \
+  --values kubernetes/promtail/values.yaml
+```
+
+### 4. Loki datasource ne Grafana
+```bash
+kubectl exec -n monitoring deploy/prometheus-grafana -c grafana -- \
+  curl -s -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Loki","type":"loki","url":"http://loki-gateway.monitoring.svc.cluster.local","access":"proxy","isDefault":false}' \
+  "http://admin:devops123@localhost:3000/api/datasources"
+```
+
+### 5. Access tools
+```bash
+# Grafana
+kubectl port-forward -n monitoring deploy/prometheus-grafana 3000:3000
+
+# ArgoCD
+kubectl port-forward svc/argocd-server 8080:443 -n argocd
+
+# Pastaj ngrok per akses extern
+ngrok http 3000
+
