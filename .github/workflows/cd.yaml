@@ -51,11 +51,19 @@ jobs:
         push: true
         tags: ${{ env.ECR_REGISTRY }}/worker:${{ github.sha }}
 
+    - name: Build and push AI Agent
+      uses: docker/build-push-action@v5
+      with:
+        context: ./apps/ai-agent
+        push: true
+        tags: ${{ env.ECR_REGISTRY }}/ai-agent:${{ github.sha }}
+
     - name: Update image tags in Git
       run: |
         git config user.email "github-actions@github.com"
         git config user.name "GitHub Actions"
         echo "IMAGE_TAG=${{ github.sha }}" > kubernetes/apps/podinfo/image-tag.env
-        git add kubernetes/apps/podinfo/image-tag.env
+        sed -i "s|ai-agent:latest|${{ env.ECR_REGISTRY }}/ai-agent:${{ github.sha }}|g" kubernetes/apps/ai-agent/deployment.yaml
+        git add kubernetes/apps/podinfo/image-tag.env kubernetes/apps/ai-agent/deployment.yaml
         git commit -m "chore: update image tags to ${{ github.sha }}" || exit 0
         git push
