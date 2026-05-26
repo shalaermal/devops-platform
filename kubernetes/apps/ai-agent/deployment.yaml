@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: ai-agent
-        image: 211125687060.dkr.ecr.eu-central-1.amazonaws.com/ai-agent:latest
+        image: 211125687060.dkr.ecr.eu-central-1.amazonaws.com/211125687060.dkr.ecr.eu-central-1.amazonaws.com/ai-agent:a42e474bbd76f41722c9be4017081d2c5ac060b0
         ports:
         - containerPort: 8080
         env:
