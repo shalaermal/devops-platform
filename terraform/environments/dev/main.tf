@@ -36,7 +36,7 @@ module "iam" {
 
   environment         = "dev"
   github_org          = "shalaermal"
-  github_repo         = "devops-platform"
+  github_repo         = "devops-platform-ai"
   ecr_repository_arns = [for name, url in module.ecr.repository_urls : "arn:aws:ecr:eu-central-1:211125687060:repository/${name}"]
   s3_bucket_arn       = module.s3.bucket_arn
 }
