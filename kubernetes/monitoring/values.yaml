@@ -43,6 +43,9 @@ alertmanager:
         - matchers:
             - alertname = "Watchdog"
           receiver: 'null'
+        - matchers:
+            - alertname =~ "etcdInsufficientMembers|etcdMembersDown|TargetDown|AlertmanagerCluster.*"
+          receiver: 'null'
     receivers:
       - name: 'slack'
         slack_configs:
