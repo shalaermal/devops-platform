@@ -27,7 +27,7 @@ module "s3" {
 module "ecr" {
   source = "../../modules/ecr"
 
-  repository_names = ["frontend", "api", "worker"]
+  repository_names = ["frontend", "api", "worker", "ai-agent"]
   environment      = "dev"
 }
 
