@@ -10,7 +10,7 @@ spec:
   project: default
   source:
     path: kubernetes/rbac
-    repoURL: git@github.com:shalaermal/devops-platform.git
+    repoURL: git@github.com:shalaermal/devops-platform-ai.git
     targetRevision: HEAD
   syncPolicy:
     automated:
