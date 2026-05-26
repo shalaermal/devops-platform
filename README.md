@@ -1,6 +1,16 @@
 # DevOps Platform
 
-A production-grade DevOps platform built on Kubernetes, simulating real-world company infrastructure. This project covers the full lifecycle of modern cloud infrastructure — from provisioning to deployment, monitoring, and automated operations.
+A production-grade DevOps platform built on Kubernetes, simulating real-world company infrastructure. This project covers the full lifecycle of modern cloud infrastructure — from provisioning to deployment, monitoring, automated operations, and **AI-powered incident response**.
+
+---
+
+## ✨ Highlights
+
+- **Full GitOps pipeline** — every change goes through Git, ArgoCD syncs automatically
+- **AI Incident Response** — when alerts fire, an AI agent analyzes logs and suggests fixes in Slack
+- **Production-grade observability** — Prometheus, Grafana, Loki, AlertManager all integrated
+- **Secure by design** — OIDC authentication, RBAC, Network Policies, no static credentials
+- **Fully automated CI/CD** — security scans, Docker builds, ECR push, auto-deploy on merge
 
 ---
 
@@ -28,6 +38,7 @@ Kind Cluster (Local Kubernetes)
         |-- Grafana (Metrics Visualization)
         |-- Loki (Log Aggregation)
         |-- AlertManager (Alerting)
+        |-- AI Agent (Incident Response) ← NEW
         |-- HPA (Auto Scaling)
         |-- CronJobs (Scheduled Tasks)
         |
@@ -50,7 +61,8 @@ AWS (Cloud Infrastructure)
 | GitOps | ArgoCD |
 | Monitoring | Prometheus + Grafana |
 | Logging | Loki + Promtail |
-| Alerting | AlertManager |
+| Alerting | AlertManager + Slack |
+| **AI Incident Response** | **Groq AI (Llama 3)** |
 | Load Testing | k6 |
 | Traffic Management | ingress-nginx + MetalLB |
 | Auto Scaling | HPA + metrics-server |
@@ -70,15 +82,20 @@ devops-platform/
 ├── apps/
 │   ├── frontend/                # React application
 │   ├── api/                     # Python FastAPI
-│   └── worker/                  # Python background worker
+│   ├── worker/                  # Python background worker
+│   └── ai-agent/                # AI Incident Response Agent (Python Flask)
 ├── kubernetes/
 │   ├── apps/
-│   │   └── podinfo/             # Demo workload manifests
+│   │   ├── podinfo/             # Demo workload manifests
+│   │   ├── ai-agent/            # AI Agent deployment + service
+│   │   └── rbac/                # RBAC ArgoCD application
+│   ├── argocd/                  # ArgoCD network policies
 │   ├── cronjobs/                # Scheduled job definitions
 │   ├── ingress-nginx/           # Ingress controller values
 │   ├── loki/                    # Logging stack values
-│   ├── monitoring/              # Prometheus + Grafana values
-│   └── podinfo/                 # Demo workload Helm values
+│   ├── monitoring/              # Prometheus + Grafana + AlertManager values
+│   ├── promtail/                # Promtail values
+│   └── rbac/                    # RBAC roles and bindings
 ├── k6/
 │   └── load-test.js             # Load testing scripts
 ├── scripts/
@@ -105,13 +122,16 @@ All AWS resources are provisioned and managed with Terraform using a modular str
 
 **S3** — stores Terraform state and build artifacts. Configured with versioning and AES256 server-side encryption.
 
-**ECR** — private container registry for Docker images. Three repositories are provisioned: `frontend`, `api`, and `worker`. Each repository has a lifecycle policy that retains only the 10 most recent images and automatically scans images on push for vulnerabilities.
+**ECR** — private container registry for Docker images. Four repositories: `frontend`, `api`, `worker`, and `ai-agent`. Each has a lifecycle policy retaining only the 10 most recent images with automatic vulnerability scanning on push.
 
-**IAM** — GitHub Actions authenticates with AWS using OIDC (OpenID Connect), eliminating the need for long-lived access keys. The role follows the principle of least privilege and grants only the permissions required for ECR operations and S3 access.
+**IAM** — GitHub Actions authenticates with AWS using OIDC (OpenID Connect), eliminating long-lived access keys. The role follows least privilege, granting only ECR and S3 permissions.
 
 ### Kubernetes Cluster (kind)
 
-The cluster is provisioned locally using kind (Kubernetes in Docker) and managed through Terraform. It consists of one control-plane node and two worker nodes, providing a realistic multi-node setup for testing high availability and workload distribution.
+Provisioned locally using kind (Kubernetes in Docker) and managed through Terraform. One control-plane node and two worker nodes with role-based assignment:
+
+- `worker` → application workloads
+- `worker2` → monitoring stack (Prometheus, Grafana, Loki, AlertManager)
 
 ---
 
@@ -119,22 +139,22 @@ The cluster is provisioned locally using kind (Kubernetes in Docker) and managed
 
 ### CI Pipeline (Pull Requests)
 
-Triggered on every pull request targeting `main`. Runs security scans with Trivy against the filesystem and Docker images, and validates that all services build successfully without pushing to the registry.
+Triggered on every PR targeting `main`. Runs Trivy security scans on filesystem and Docker images for all services.
 
 ### CD Pipeline (Merge to main)
 
-Triggered on every merge to `main`. Builds Docker images for all three services, pushes them to ECR tagged with the Git commit SHA, and updates the image tag reference in the repository. ArgoCD detects the change and automatically deploys to the cluster.
+Triggered on merge to `main`. Builds and pushes all four Docker images to ECR tagged with the Git commit SHA. ArgoCD auto-deploys on detecting the change.
 
 ```
 PR opened
     |
-CI Pipeline runs (tests + security scan)
+CI Pipeline (Trivy security scan + Docker build)
     |
 Code review and approval
     |
 Merge to main
     |
-CD Pipeline runs (build + push to ECR)
+CD Pipeline (build + push to ECR)
     |
 ArgoCD detects Git change
     |
@@ -147,47 +167,117 @@ Automatic deployment to cluster
 
 ### Prometheus
 
-Collects metrics from all cluster components including nodes, pods, and Kubernetes system components. Configured with a 7-day retention period.
+Collects metrics from all cluster components. ServiceMonitors automatically discover and scrape application metrics. Configured with 7-day retention.
 
 ### Grafana
 
-Visualizes metrics from Prometheus. Pre-configured with dashboards for cluster resource usage, node health, networking, and workload performance. Admin credentials are managed as Kubernetes secrets.
+Custom dashboards built using PromQL and LogQL:
+
+- **podinfo CPU Usage %** — real-time CPU per pod
+- **podinfo RAM Usage (MB)** — memory consumption per pod
+- **podinfo Pod Restarts** — restart tracking
+- **podinfo Logs** — live log streaming from Loki
+- **RED Dashboard** — Rate, Errors, Duration metrics
 
 ### AlertManager
 
-Handles alert routing and deduplication. Integrates with Prometheus alerting rules to notify on critical cluster events.
+Alert rules configured:
+
+| Alert | Condition |
+|---|---|
+| `PodCrashLooping` | restart rate > 0 for 1 minute |
+| `PodNotReady` | not ready for 2+ minutes |
+| `HighCPUUsage` | CPU > 80% for 2 minutes |
+| `HighMemoryUsage` | memory > 85% for 2 minutes |
+
+Alerts routed to Slack with resolved notifications.
 
 ### Loki + Promtail
 
-Loki aggregates logs from all pods across the cluster. Promtail runs as a DaemonSet, ensuring one log collector per node so no logs are missed. Logs are queryable directly from Grafana alongside metrics.
+Loki aggregates logs cluster-wide. Promtail runs as a DaemonSet — one collector per node.
+
+---
+
+## 🤖 AI-Powered Incident Response
+
+The most unique feature of this platform. When AlertManager fires an alert, the AI Agent automatically:
+
+1. Receives the webhook from AlertManager
+2. Fetches recent pod logs from Loki
+3. Sends alert context + logs to **Groq AI (Llama 3)**
+4. Posts a structured analysis to Slack
+
+```
+Alert fires
+    |
+AlertManager ──────────────────────────────► Slack
+    |                                         (standard notification)
+    ▼
+AI Agent webhook
+    |
+Fetch logs from Loki
+    |
+Groq AI (Llama 3.1) analysis
+    |
+    ▼
+Slack message:
+┌─────────────────────────────────────────┐
+│ 🤖 AI Incident Analysis: PodCrashLooping│
+│ Namespace: argocd | Pod: argocd-server  │
+│                                         │
+│ Root Cause:                             │
+│ Connectivity timeout to Kubernetes API  │
+│ server causing crash loop.              │
+│                                         │
+│ Immediate Fix:                          │
+│ kubectl delete pod argocd-server-xxx    │
+│                                         │
+│ Long-term Recommendation:               │
+│ Implement pod anti-affinity rules.      │
+└─────────────────────────────────────────┘
+```
+
+The AI Agent is a containerized Python Flask service deployed in Kubernetes. API keys are stored as Kubernetes Secrets — never in Git.
+
+**Tech stack:** Python + Flask + Groq API + Loki API + Slack Webhooks
+
+---
+
+## RBAC
+
+| Role | Scope | Permissions |
+|---|---|---|
+| `developer` | podinfo namespace | get, list, watch pods/logs/deployments |
+| `ops` | podinfo namespace | full access to all resources |
+| `readonly` | cluster-wide | get, list, watch all resources |
+
+---
+
+## Network Policies
+
+Network policies defined for `podinfo`, `monitoring`, and `argocd` namespaces to restrict inter-namespace traffic.
+
+> **Note:** Enforcement requires Calico or Cilium CNI. The default kind CNI (kindnet) does not enforce Network Policies. In production (EKS, GKE), these policies are enforced automatically.
 
 ---
 
 ## GitOps with ArgoCD
 
-ArgoCD continuously monitors the Git repository and reconciles the cluster state to match what is defined in Git. Any manual change made directly to the cluster will be automatically reverted to match the Git state.
+ArgoCD continuously monitors the Git repository and reconciles cluster state. Manual changes to the cluster are automatically reverted.
 
-Applications are configured with automatic sync enabled. Rollback to any previous deployment is available through the ArgoCD UI by selecting a previous Git revision.
+Applications managed:
+
+| Application | Path |
+|---|---|
+| `podinfo` | `kubernetes/apps/podinfo` |
+| `argocd-config` | `kubernetes/argocd` |
+| `rbac` | `kubernetes/rbac` |
 
 ---
 
 ## Auto Scaling
 
-Horizontal Pod Autoscaler (HPA) is configured for the demo workload with a CPU target of 50%. The minimum replica count is 2 and the maximum is 4. When load increases beyond the threshold, Kubernetes automatically schedules additional pods. When load decreases, pods are scaled back down after a cooldown period.
-
-This was validated with k6 load testing, which demonstrated the full scale-up and scale-down cycle visible in Grafana dashboards.
-
----
-
-## Load Testing
-
-k6 load tests simulate realistic traffic patterns against the cluster. The test script uses a staged approach: ramping up to 20 virtual users over 30 seconds, sustaining 50 virtual users for 1 minute, then ramping down. This is sufficient to trigger HPA scaling events and validate cluster behavior under load.
-
----
-
-## CronJobs
-
-A Kubernetes CronJob runs on a scheduled interval to simulate operational tasks such as cleanup, reporting, or health verification. The job runs an Alpine container, executes the task, and terminates cleanly. Kubernetes retains job history for log inspection.
+HPA configured for podinfo with CPU target 50%, min 2 replicas, max 4. Validated with k6 load testing — full scale-up/down cycle visible in Grafana.
 
 ---
 
@@ -199,17 +289,27 @@ A Kubernetes CronJob runs on a scheduled interval to simulate operational tasks 
 - Docker Desktop with WSL2 integration enabled
 - kubectl, kind, terraform, helm, aws cli, git, k6, ngrok
 
-### Access Services Locally
+### Quick Start
 
 ```bash
-# Start port-forwarding for monitoring tools
+# Provision infrastructure
+terraform -chdir=terraform/environments/dev apply
+
+# Start monitoring stack
 bash scripts/start-platform.sh
 
+# External access
+ngrok http 3000
+```
+
+### Access Services
+
+```bash
 # Grafana
-kubectl port-forward svc/prometheus-grafana 3000:80 -n monitoring
+kubectl port-forward -n monitoring deploy/prometheus-grafana 3000:3000
 
 # Prometheus
-kubectl port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090 -n monitoring
+kubectl port-forward svc/prometheus-kube-prometheus-prometheus 9091:9090 -n monitoring
 
 # ArgoCD
 kubectl port-forward svc/argocd-server 8080:443 -n argocd
@@ -224,79 +324,64 @@ k6 run k6/load-test.js
 
 ---
 
-## Key Concepts Demonstrated
-
-This project covers the following areas relevant to Infrastructure and DevOps engineering roles.
-
-Infrastructure as Code using Terraform with a modular structure supporting multiple environments. Kubernetes cluster management including deployments, services, ingress, autoscaling, and scheduled jobs. Container lifecycle management from build through registry to deployment. GitOps principles using ArgoCD where Git is the single source of truth for cluster state. Observability through metrics collection, log aggregation, and dashboard visualization. Secure cloud authentication using OIDC without static credentials. Automated CI/CD pipelines that enforce code review and testing before deployment.
-
----
-
-## Author
-
-Ermal Shala
-
----
-
-## Security Notice
-
-Before deploying this platform, replace all placeholder values:
-
-- `kubernetes/monitoring/values.yaml` — replace `adminPassword` with a strong password
-- `kubernetes/monitoring/values.yaml` — replace `slack_api_url` with your own Slack webhook URL
-- Never commit real credentials to version control
-
-## Contributing
-
-This is a personal learning project. Feel free to fork and adapt it for your own use.
-
-## License
-
-
----
-
 ## Quick Recovery (Monitoring Stack)
 
-Nëse cluster-i riniset dhe duhet të rikonfigurosh monitoring:
-
-### 1. Prometheus + Grafana
 ```bash
+# 1. Prometheus + Grafana
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   --namespace monitoring --create-namespace \
   --values kubernetes/monitoring/values.yaml
-```
 
-### 2. Loki
-```bash
+# 2. Loki
 helm upgrade --install loki grafana/loki \
   --namespace monitoring \
   --values kubernetes/loki/values.yaml
-```
 
-### 3. Promtail
-```bash
+# 3. Promtail
 helm upgrade --install promtail grafana/promtail \
   --namespace monitoring \
   --values kubernetes/promtail/values.yaml
-```
 
-### 4. Loki datasource ne Grafana
-```bash
+# 4. Loki datasource in Grafana
 kubectl exec -n monitoring deploy/prometheus-grafana -c grafana -- \
   curl -s -X POST \
   -H "Content-Type: application/json" \
   -d '{"name":"Loki","type":"loki","url":"http://loki-gateway.monitoring.svc.cluster.local","access":"proxy","isDefault":false}' \
   "http://admin:devops123@localhost:3000/api/datasources"
+
+# 5. AI Agent secrets
+kubectl create secret generic groq-api-key \
+  --from-literal=api-key=YOUR_GROQ_API_KEY \
+  --namespace=default
+
+kubectl create secret generic slack-webhook \
+  --from-literal=url=YOUR_SLACK_WEBHOOK_URL \
+  --namespace=default
 ```
 
-### 5. Access tools
-```bash
-# Grafana
-kubectl port-forward -n monitoring deploy/prometheus-grafana 3000:3000
+---
 
-# ArgoCD
-kubectl port-forward svc/argocd-server 8080:443 -n argocd
+## Key Concepts Demonstrated
 
-# Pastaj ngrok per akses extern
-ngrok http 3000
+- Infrastructure as Code with Terraform (modular, multi-environment)
+- Kubernetes cluster management — deployments, services, ingress, autoscaling, scheduled jobs
+- GitOps with ArgoCD — Git as single source of truth
+- Full observability — metrics, logs, alerts, dashboards
+- **AI-powered incident response** — automated root cause analysis and fix suggestions
+- Secure cloud authentication via OIDC — no static credentials
+- Automated CI/CD with security scanning (Trivy)
+- RBAC — role-based access control
+- Network policies for namespace isolation
+
+---
+
+## Security Notice
+
+Before deploying, replace all placeholder values:
+
+- `kubernetes/monitoring/values.yaml` — replace `adminPassword` with a strong password
+- `kubernetes/monitoring/values.yaml` — replace `slack_api_url` with your Slack webhook URL
+- Create Kubernetes secrets for `groq-api-key` and `slack-webhook` — never commit API keys to Git
+
+---
 
