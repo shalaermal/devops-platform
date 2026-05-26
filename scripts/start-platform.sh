@@ -1,4 +1,9 @@
 #!/bin/bash
+
+echo "==> Fixing iptables for kind networking..."
+sudo iptables -P FORWARD ACCEPT
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
 set -e
 
 echo "==> Starting monitoring stack..."
